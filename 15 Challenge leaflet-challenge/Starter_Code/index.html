@@ -1,34 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Leaflet Step-1</title>
+  <title>Leaflet Challenge</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+    }
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin="" />
+    #map,
+    body,
+    html {
+      height: 100%;
+    }
 
-  <!-- Our CSS -->
-  <link rel="stylesheet" type="text/css" href="static/css/style.css">
+    #map {
+      height: 600px;
+    }
+  </style>
 </head>
-
 <body>
-
-  <!-- The div that holds our map -->
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""></script>
-  <!-- D3 JavaScript -->
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <!-- Our JavaScript -->
-  <script type="text/javascript" src="static/js/logic.js"></script>
-</body>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
 
+  <script>
+    // Create the map object with center and zoom options.
+    let map = L.map("map", {
+      center: [37.7749, -122.4194], // Center at San Francisco
+      zoom: 5
+    });
+
+    // Create the 'basemap' tile layer that will be the background of our map.
+    const basemap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors"
+    });
+
+    // Create the 'street' tile layer as a second background of the map
+    const streetLayer = L.tileLayer("https://{s}.tile.stamen.com/toner/{z}/{x}/{y}.png", {
+      attribution: "&copy; <a href='https://stamen.com/'>Stamen Design</a>"
+    });
+
+    // Add the 'basemap' tile layer to the map
+    basemap.addTo(map);
+
+    // Create layer groups for earthquakes and tectonic plates
+    let earthquakesLayer = new L.LayerGroup();
+    let tectonicPlatesLayer = new L.LayerGroup().addTo(map);
+
+    // Make a request that retrieves the earthquake geoJSON data.
+    d3.json("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson").then(function (data) {
+      // This function returns the style data for each of the earthquakes we plot on the map.
+      function styleInfo(feature) {
+        return {
+          opacity: 1,
+          fillOpacity: 1,
+          fillColor: getColor(feature.geometry.coordinates[2]),
+          color: "#000000",
+          stroke: true,
+          weight: 0.5,
+          radius: getRadius(feature.properties.mag)
+        };
+      }
+
+      // This function determines the color of the marker based on the depth of the earthquake.
+      function getColor(depth) {
+        if (depth <= 10) {
+          return "#98ee00"; // Green
+        } else if (depth <= 30) {
+          return "#d4ee00"; // Yellow
+        } else if (depth <= 50) {
+          return "#eecc00"; // Orange
+        } else if (depth <= 70) {
+          return "#ee9c00"; // Red
+        } else if (depth <= 90) {
+          return "#ea822c"; // Dark red
+        } else {
+          return "#ea2c2c"; // Very dark red
+        }
+      }
+
+      // This function determines the radius of the earthquake marker based on its magnitude.
+      function getRadius(magnitude) {
+        if (magnitude === 0) {
+          return 1;
+        }
+        return magnitude * 4;
+      }
+
+      // Add a GeoJSON layer to the map once the earthquake data is loaded.
+      L.geoJson(data, {
+        pointToLayer: function (feature, latlng) {
+          return L.circleMarker(latlng);
+        },
+        style: styleInfo,
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(
+            "<h3>Magnitude: " + feature.properties.mag + "</h3><hr><p>Location: " + feature.properties.place + "</p>"
+          );
+        }
+      }).addTo(earthquakesLayer);
+
+      // Create a legend control object.
+      let legend = L.control({ position: "bottomright" });
+
+      // Then add all the details for the legend
+      legend.onAdd = function () {
+        let div = L.DomUtil.create("div", "info legend");
+
+        // Initialize depth intervals and colors for the legend
+        let depths = [-10, 10, 30, 50, 70, 90];
+        let colors = [
+          "#98ee00",
+          "#d4ee00",
+          "#eecc00",
+          "#ee9c00",
+          "#ea822c",
+          "#ea2c2c"
+        ];
+
+        // Loop through our depth intervals to generate a label with a colored square for each interval.
+        for (let i = 0; i < depths.length; i++) {
+          div.innerHTML +=
+            "<i style='background: " + colors[i] + "'></i> " +
+            depths[i] + (depths[i + 1] ? "&ndash;" + depths[i + 1] + " km<br>" : "+ km");
+        }
+
+        return div;
+      };
+
+      // Finally, add the legend to the map.
+      legend.addTo(map);
+    });
+
+    // OPTIONAL: Step 2 - Make a request to get our Tectonic Plate geoJSON data.
+    d3.json("https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json").then(function (plate_data) {
+      // Save the geoJSON data to the tectonic_plates layer
+      L.geoJson(plate_data, {
+        color: "orange",
+        weight: 2
+      }).addTo(tectonicPlatesLayer);
+    });
+
+    // Create baseMaps and overlays for layer control
+    let baseMaps = {
+      "OpenStreetMap": basemap,
+      "Street Map": streetLayer
+    };
+
+    let overlayMaps = {
+      "Earthquakes": earthquakesLayer,
+      "Tectonic Plates": tectonicPlatesLayer
+    };
+
+    // Add a control to the map that will allow the user to change which layers are visible.
+    L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+
+    // Add tectonic plates to the map.
+    tectonicPlatesLayer.addTo(map);
+  </script>
+</body>
 </html>
+
+
+
